@@ -1,36 +1,51 @@
 # pki-secrets-engine
-https://www.vaultproject.io/docs/secrets/pki
 
+## This repository is for the purpose of learning how PKI Secrets Engine works and is a step-by-step guide following this [documentation](https://www.vaultproject.io/docs/secrets/pki).
 
+Start Vault in DEV Mode and export the env variable
+```shell
 vault server -dev
 
 export VAULT_ADDR="http://127.0.0.1:8200"
+```
 
+Login with the provided root token
+```shell
 vault login <rook_token>
+```
 
-Mount the backend is done with:
+Mount the backend
+```shell
 vault secrets enable pki
-
+```
 
 Configure CA certificate - issued like directly from the root
+```shell
 vault secrets tune -max-lease-ttl=87600h pki
+```
 
 Generate root certificate
+```shell
 vault write pki/root/generate/internal common_name=myvault.com ttl=87600h
+```
 
 Setup the URL configuration
+```shell
 vault write pki/config/urls issuing_certificates="http://vault.example.com:8200/v1/pki/ca" crl_distribution_points="http://vault.example.com:8200/v1/pki/crl"
+```
 
 Configure a role
+```shell
 vault write pki/roles/example-dot-com \
     allowed_domains=example.com \
     allow_subdomains=true max_ttl=72h
-
+```
 
 Issue certificates
+```shell
 vault write pki/issue/example-dot-com \
     common_name=blah.example.com
-
+```
 
 Setting Up Intermediate CA
 
@@ -38,22 +53,27 @@ This guide builds on the previous guide's root certificate authority and creates
 an intermediate authority using the root authority to sign the intermediate's certificate.
 
 Mount the backend
-Note: mount it at a different path 
+**Note**: mount it at a different path 
+```shell
 vault secrets enable -path=pki_int pki
+```
 
 Configure an Intermediate CA
 That sets the maximum TTL for secrets issued from the mount to 5 years. 
 This value should be less than or equal to the root certificate authority.
+```shell
 vault secrets tune -max-lease-ttl=43800h pki_int
+```
 
- generate our intermediate certificate signing request:
+Generate our intermediate certificate signing request
+ ```shell
  vault write pki_int/intermediate/generate/internal common_name="myvault.com Intermediate Authority" ttl=43800h
+```
 
- Take the signing request from the intermediate authority and sign it using another certificate authority, 
- in this case the root certificate authority generated in the first example.
- vault write pki/root/sign-intermediate csr=@pki_int.csr format=pem_bundle ttl=43800h
-
- echo "-----BEGIN CERTIFICATE REQUEST-----
+Take the signing request from the intermediate authority and sign it using another certificate authority, 
+in this case the root certificate authority generated in the first example.
+```shell 
+echo "-----BEGIN CERTIFICATE REQUEST-----
 MIICcjCCAVoCAQAwLTErMCkGA1UEAxMibXl2YXVsdC5jb20gSW50ZXJtZWRpYXRl
 IEF1dGhvcml0eTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMXLqh+K
 t7xNN4aX+G+Q4KOwEkuxV1YwaDNGTTfuMKyhrCsyZQ562rIEoUgP1DsLQKFgIWNN
@@ -70,10 +90,12 @@ UNT9y/N3ZvBY0/gsJ2qKmsDYg/zZQvQvREGJiGx4EnBMjAcQrecXURYMgNVRPgxk
 Vhvz4qbV
 -----END CERTIFICATE REQUEST-----" > pki_int.csr
 
-vault write pki/root/sign-intermediate csr=@pki_int.csr format=pem_bundle ttl=43800h
+ vault write pki/root/sign-intermediate csr=@pki_int.csr format=pem_bundle ttl=43800h
+```
 
 
-Now set the intermediate certificate authorities signing certificate to the root-signed certificate.
+Now set the intermediate certificate authorities signing certificate to the root-signed certificate
+```shell
 echo "-----BEGIN CERTIFICATE-----
 MIIDuTCCAqGgAwIBAgIUFekbeXeEwdTKI31PQskFTi23qmkwDQYJKoZIhvcNAQEL
 BQAwGTEXMBUGA1UEAxMObXktd2Vic2l0ZS5jb20wHhcNMjEwNDA4MDkzNTQ4WhcN
@@ -98,17 +120,23 @@ MRjdHUzLH7JpmyXo0Xosnb1qavmZFvkWkgqtC0BSNz9qh1Y0b5TpNTpjKlxR
 -----END CERTIFICATE-----" > signed_certificate.pem
 
 vault write pki_int/intermediate/set-signed certificate=@signed_certificate.pem
+```
 
 Set URL configuration
+```shell
 vault write pki_int/config/urls issuing_certificates="http://127.0.0.1:8200/v1/pki_int/ca" crl_distribution_points="http://127.0.0.1:8200/v1/pki_int/crl"
+```
 
 Configure a role
-A role is a logical name that maps to a policy used to generate those credentials. 
+A role is a logical name that maps to a policy used to generate those credentials
+```shell
 vault write pki_int/roles/example-dot-com \
     allowed_domains=example.com \
     allow_subdomains=true max_ttl=72h
-
+```
 
 Issue Certificates
+```shell
 vault write pki_int/issue/example-dot-com \
     common_name=blah.example.com
+```
